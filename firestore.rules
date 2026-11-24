@@ -1,0 +1,200 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Deny all access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.get('email', '') == 'yadavdurgesh5492@gmail.com' &&
+         request.auth.token.get('email_verified', false) == true)
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- ENTITY VALIDATION HELPERS ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+             data.roleLabel in ['Admin', 'Village Officer', 'Field Analyst', 'Student Researcher'] &&
+             (!('district' in data) || (data.district is string && data.district.size() <= 80)) &&
+             (!('department' in data) || (data.department is string && data.department.size() <= 80)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVillage(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+             data.district is string && data.district.size() >= 2 && data.district.size() <= 80 &&
+             data.state is string && data.state.size() >= 2 && data.state.size() <= 80 &&
+             (!('latitude' in data) || data.latitude is number) &&
+             (!('longitude' in data) || data.longitude is number) &&
+             (!('areaSqKm' in data) || (data.areaSqKm is number && data.areaSqKm >= 0)) &&
+             data.dataSourceType in ['VERIFIED_FIELD', 'DEMO_SAMPLE'] &&
+             data.population is map && data.population.size() == 6 &&
+             data.population.total is int && data.population.total >= 1 &&
+             data.population.households is int && data.population.households >= 1 &&
+             data.agriculture is map && data.agriculture.size() == 7 &&
+             data.agriculture.soilType is string && data.agriculture.soilType.size() <= 50 &&
+             data.agriculture.primarySeason in ['Kharif', 'Rabi', 'Zaid', 'All-Season'] &&
+             data.agriculture.majorCrops is string && data.agriculture.majorCrops.size() <= 200 &&
+             data.healthcare is map && data.healthcare.size() == 8 &&
+             data.healthcare.ambulanceAvailable is bool &&
+             data.education is map && data.education.size() == 7 &&
+             data.education.literacyRatePct is number &&
+             data.infrastructure is map && data.infrastructure.size() == 6 &&
+             data.infrastructure.pavedRoadPct is number &&
+             data.scores is map && data.scores.size() == 7 &&
+             data.scores.overallScore is number &&
+             data.scores.developmentLevel is string && data.scores.developmentLevel.size() <= 40 &&
+             data.scores.weakestSector is string && data.scores.weakestSector.size() <= 40 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAnalysis(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.villageId is string && data.villageId.size() >= 1 && data.villageId.size() <= 128 &&
+             data.villageName is string && data.villageName.size() >= 1 && data.villageName.size() <= 80 &&
+             data.dataSourceType in ['VERIFIED_FIELD', 'DEMO_SAMPLE'] &&
+             data.overallScore is number && data.overallScore >= 0 && data.overallScore <= 100 &&
+             data.developmentLevel is string && data.developmentLevel.size() <= 40 &&
+             data.weakSectors is list && data.weakSectors.size() <= 6 &&
+             (data.weakSectors.size() == 0 || data.weakSectors[0] is string) &&
+             data.mlModelSummary is string && data.mlModelSummary.size() >= 1 && data.mlModelSummary.size() <= 3000 &&
+             (!('aiExecutiveSummary' in data) || (data.aiExecutiveSummary is string && data.aiExecutiveSummary.size() <= 5000)) &&
+             data.recommendations is list && data.recommendations.size() <= 15 &&
+             (data.recommendations.size() == 0 || data.recommendations[0] is string) &&
+             (!('priorityActions' in data) || (data.priorityActions is list && data.priorityActions.size() <= 10 && (data.priorityActions.size() == 0 || data.priorityActions[0] is string))) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidScheme(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 2 && data.name.size() <= 140 &&
+             data.ministry is string && data.ministry.size() >= 2 && data.ministry.size() <= 140 &&
+             data.sector in ['Agriculture', 'Healthcare', 'Education', 'Infrastructure', 'Multi-Sector'] &&
+             data.eligibility is string && data.eligibility.size() >= 2 && data.eligibility.size() <= 600 &&
+             data.benefits is string && data.benefits.size() >= 2 && data.benefits.size() <= 600 &&
+             data.officialWebsite is string && data.officialWebsite.size() >= 5 && data.officialWebsite.size() <= 240 &&
+             data.verifiedOfficial is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- ADMIN DIRECTORY (READ-ONLY FROM CLIENT) ---
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && request.auth.uid == adminUid;
+      allow list, write: if false;
+    }
+
+    // --- USER PROFILE & NESTED COLLECTIONS ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isValidId(userId) &&
+                       isOwner(userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       (request.resource.data.roleLabel != 'Admin' || isAdmin()) &&
+                       request.resource.data.keys().hasAll(['userId', 'displayName', 'roleLabel', 'createdAt', 'updatedAt']) &&
+                       request.resource.data.keys().hasOnly(['userId', 'displayName', 'email', 'roleLabel', 'district', 'department', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(request.resource.data);
+
+      allow update: if isValidId(userId) &&
+                       (isOwner(userId) || isAdmin()) &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.userId == resource.data.userId &&
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       (request.resource.data.roleLabel != 'Admin' || resource.data.roleLabel == 'Admin' || isAdmin()) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'email', 'roleLabel', 'district', 'department', 'updatedAt']);
+
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      // Villages subcollection
+      match /villages/{villageId} {
+        allow get: if isValidId(villageId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+
+        allow create: if isValidId(villageId) &&
+                         isOwner(userId) &&
+                         request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.keys().hasAll(['userId', 'name', 'district', 'state', 'dataSourceType', 'population', 'agriculture', 'healthcare', 'education', 'infrastructure', 'scores', 'createdAt', 'updatedAt']) &&
+                         request.resource.data.keys().hasOnly(['userId', 'name', 'district', 'state', 'latitude', 'longitude', 'areaSqKm', 'dataSourceType', 'population', 'agriculture', 'healthcare', 'education', 'infrastructure', 'scores', 'createdAt', 'updatedAt']) &&
+                         isValidVillage(request.resource.data);
+
+        allow update: if isValidId(villageId) &&
+                         (isOwner(userId) || isAdmin()) &&
+                         isValidVillage(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.createdAt == resource.data.createdAt &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'district', 'state', 'latitude', 'longitude', 'areaSqKm', 'dataSourceType', 'population', 'agriculture', 'healthcare', 'education', 'infrastructure', 'scores', 'updatedAt']);
+
+        allow delete: if isValidId(villageId) && (isOwner(userId) || isAdmin());
+      }
+
+      // Development Analyses subcollection
+      match /analyses/{analysisId} {
+        allow get: if isValidId(analysisId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+
+        allow create: if isValidId(analysisId) &&
+                         isOwner(userId) &&
+                         request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.keys().hasAll(['userId', 'villageId', 'villageName', 'dataSourceType', 'overallScore', 'developmentLevel', 'weakSectors', 'mlModelSummary', 'recommendations', 'createdAt', 'updatedAt']) &&
+                         request.resource.data.keys().hasOnly(['userId', 'villageId', 'villageName', 'dataSourceType', 'overallScore', 'developmentLevel', 'weakSectors', 'mlModelSummary', 'aiExecutiveSummary', 'recommendations', 'priorityActions', 'createdAt', 'updatedAt']) &&
+                         isValidAnalysis(request.resource.data);
+
+        allow update: if isValidId(analysisId) &&
+                         (isOwner(userId) || isAdmin()) &&
+                         isValidAnalysis(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.createdAt == resource.data.createdAt &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['villageName', 'dataSourceType', 'overallScore', 'developmentLevel', 'weakSectors', 'mlModelSummary', 'aiExecutiveSummary', 'recommendations', 'priorityActions', 'updatedAt']);
+
+        allow delete: if isValidId(analysisId) && (isOwner(userId) || isAdmin());
+      }
+
+      // Government Schemes subcollection
+      match /schemes/{schemeId} {
+        allow get: if isValidId(schemeId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+
+        allow create: if isValidId(schemeId) &&
+                         isOwner(userId) &&
+                         request.resource.data.userId == request.auth.uid &&
+                         request.resource.data.keys().hasAll(['userId', 'name', 'ministry', 'sector', 'eligibility', 'benefits', 'officialWebsite', 'verifiedOfficial', 'createdAt', 'updatedAt']) &&
+                         request.resource.data.keys().hasOnly(['userId', 'name', 'ministry', 'sector', 'eligibility', 'benefits', 'officialWebsite', 'verifiedOfficial', 'createdAt', 'updatedAt']) &&
+                         isValidScheme(request.resource.data);
+
+        allow update: if isValidId(schemeId) &&
+                         (isOwner(userId) || isAdmin()) &&
+                         isValidScheme(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.createdAt == resource.data.createdAt &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'ministry', 'sector', 'eligibility', 'benefits', 'officialWebsite', 'verifiedOfficial', 'updatedAt']);
+
+        allow delete: if isValidId(schemeId) && (isOwner(userId) || isAdmin());
+      }
+    }
+  }
+}

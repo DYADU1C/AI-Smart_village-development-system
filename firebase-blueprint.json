@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and rural planning workspace settings.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "roleLabel": { "type": "string", "enum": ["Admin", "Village Officer", "Field Analyst", "Student Researcher"] },
+        "district": { "type": "string", "description": "Assigned district" },
+        "department": { "type": "string", "description": "Department or institution" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "roleLabel", "createdAt", "updatedAt"]
+    },
+    "Village": {
+      "title": "Village",
+      "description": "Complete multi-sector village profile including geography, population, agriculture, healthcare, education, infrastructure, and computed development scores.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "district": { "type": "string" },
+        "state": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "areaSqKm": { "type": "number" },
+        "dataSourceType": { "type": "string", "enum": ["VERIFIED_FIELD", "DEMO_SAMPLE"] },
+        "population": { "type": "object" },
+        "agriculture": { "type": "object" },
+        "healthcare": { "type": "object" },
+        "education": { "type": "object" },
+        "infrastructure": { "type": "object" },
+        "scores": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "name", "district", "state", "dataSourceType", "population", "agriculture", "healthcare", "education", "infrastructure", "scores", "createdAt", "updatedAt"]
+    },
+    "DevelopmentAnalysis": {
+      "title": "DevelopmentAnalysis",
+      "description": "Saved ML & Gemini AI development evaluation and personalized recommendations for a village.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "villageId": { "type": "string" },
+        "villageName": { "type": "string" },
+        "dataSourceType": { "type": "string", "enum": ["VERIFIED_FIELD", "DEMO_SAMPLE"] },
+        "overallScore": { "type": "number" },
+        "developmentLevel": { "type": "string" },
+        "weakSectors": { "type": "array" },
+        "mlModelSummary": { "type": "string" },
+        "aiExecutiveSummary": { "type": "string" },
+        "recommendations": { "type": "array" },
+        "priorityActions": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "villageId", "villageName", "dataSourceType", "overallScore", "developmentLevel", "weakSectors", "mlModelSummary", "recommendations", "createdAt", "updatedAt"]
+    },
+    "GovernmentScheme": {
+      "title": "GovernmentScheme",
+      "description": "Verifiable government rural development scheme record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "ministry": { "type": "string" },
+        "sector": { "type": "string", "enum": ["Agriculture", "Healthcare", "Education", "Infrastructure", "Multi-Sector"] },
+        "eligibility": { "type": "string" },
+        "benefits": { "type": "string" },
+        "officialWebsite": { "type": "string" },
+        "verifiedOfficial": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "name", "ministry", "sector", "eligibility", "benefits", "officialWebsite", "verifiedOfficial", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile and workspace configuration."
+    },
+    "/users/{userId}/villages/{villageId}": {
+      "schema": { "$ref": "#/entities/Village" },
+      "description": "Multi-sector village records owned by the user."
+    },
+    "/users/{userId}/analyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/DevelopmentAnalysis" },
+      "description": "ML & AI village development analysis snapshots and recommendations."
+    },
+    "/users/{userId}/schemes/{schemeId}": {
+      "schema": { "$ref": "#/entities/GovernmentScheme" },
+      "description": "Verifiable government scheme records managed by the user."
+    }
+  }
+}
